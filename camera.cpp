@@ -7,6 +7,7 @@
 #include <SDL3/SDL_video.h>
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <iostream>
 #include <thread>
 
@@ -53,61 +54,77 @@ void handle_event(CameraApp *app) {
     }
 }
 
-int main() {
-    CameraApp app;
+void init_window(CameraApp *app) {
 
-    SDL_Init(SDL_INIT_CAMERA | SDL_INIT_VIDEO | SDL_WINDOW_METAL);
-
-    app.p_sdlwindow = SDL_CreateWindow(app.window.name.c_str(), app.window.w, app.window.h, app.window.flags);
-    if (app.p_sdlwindow == NULL) {
+    app->p_sdlwindow = SDL_CreateWindow(app->window.name.c_str(), app->window.w, app->window.h, app->window.flags);
+    if (app->p_sdlwindow == NULL) {
         SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Could not create window: %s\n", SDL_GetError());
-        return 1;
+        exit(1);
     }
 
-    app.camera.p_camera_ids = SDL_GetCameras(&app.camera.count_cameras);
-    if (app.camera.p_camera_ids == NULL) {
+}
+
+void init_camera(CameraApp *app) {
+    app->camera.p_camera_ids = SDL_GetCameras(&app->camera.count_cameras);
+    if (app->camera.p_camera_ids == NULL) {
         SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Could not find cameras: %s\n", SDL_GetError());
     }
 
-    std::cout << "number of cameras: " << app.camera.count_cameras << "\n";
-    app.camera.camera_id = *app.camera.p_camera_ids;
+    std::cout << "number of cameras: " << app->camera.count_cameras << "\n";
+    app->camera.camera_id = *app->camera.p_camera_ids;
 
-    app.camera.p_camera = SDL_OpenCamera(app.camera.camera_id, NULL);
-    if (app.camera.p_camera == NULL) {
+    app->camera.p_camera = SDL_OpenCamera(app->camera.camera_id, NULL);
+    if (app->camera.p_camera == NULL) {
         SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Could not open camera: %s\n", SDL_GetError());
-        return 1;
+        exit(1);
     }
 
     SDL_Log("Using SDL camera driver: %s", SDL_GetCurrentCameraDriver());
+}
 
-    app.p_renderer = SDL_CreateRenderer(app.p_sdlwindow, NULL);
-    SDL_SetRenderDrawColor(app.p_renderer, 18, 18, 18, 0);
-    SDL_RenderClear(app.p_renderer);
-    SDL_RenderPresent(app.p_renderer);
+void init_camera_renderer(CameraApp *app) {
+    app->p_renderer = SDL_CreateRenderer(app->p_sdlwindow, NULL);
+    SDL_SetRenderDrawColor(app->p_renderer, 18, 18, 18, 0);
+    SDL_RenderClear(app->p_renderer);
+    SDL_RenderPresent(app->p_renderer);
+}
 
+void camera_render_loop(CameraApp *app) {
 
-    while (app.quit != true) {
-        app.event = {}; // TODO: make sure this zero initializes
-        while (SDL_PollEvent(&app.event)) {
-            handle_event(&app);
+    while (app->quit != true) {
+        app->event = {}; // TODO: make sure this zero initializes
+        while (SDL_PollEvent(&app->event)) {
+            handle_event(app);
         }
 
         std::uint64_t timestamp_ns;
-        SDL_Surface* p_cam_surface = SDL_AcquireCameraFrame(app.camera.p_camera, &timestamp_ns);
+        SDL_Surface* p_cam_surface = SDL_AcquireCameraFrame(app->camera.p_camera, &timestamp_ns);
         if (p_cam_surface) {
-            SDL_Texture* p_texture = SDL_CreateTextureFromSurface(app.p_renderer, p_cam_surface);
-            SDL_RenderTexture(app.p_renderer, p_texture, NULL, NULL);
+            SDL_Texture* p_texture = SDL_CreateTextureFromSurface(app->p_renderer, p_cam_surface);
+            SDL_RenderTexture(app->p_renderer, p_texture, NULL, NULL);
 
-            SDL_RenderPresent(app.p_renderer);
+            SDL_RenderPresent(app->p_renderer);
 
             SDL_DestroyTexture(p_texture);
-            SDL_ReleaseCameraFrame(app.camera.p_camera, p_cam_surface);
+            SDL_ReleaseCameraFrame(app->camera.p_camera, p_cam_surface);
         }
 
         std::chrono::seconds duration(1/60);
         std::this_thread::sleep_for(duration);
 
     }
+
+}
+
+int main() {
+    CameraApp app;
+
+    SDL_Init(SDL_INIT_CAMERA | SDL_INIT_VIDEO | SDL_WINDOW_METAL);
+
+    init_window(&app);
+    init_camera(&app);
+    init_camera_renderer(&app);
+    camera_render_loop(&app);
 
     SDL_DestroyWindow(app.p_sdlwindow);
     SDL_Quit();
