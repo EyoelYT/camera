@@ -1,11 +1,15 @@
 #include "SDL3/SDL_log.h"
-#include <iostream>
-#include <cstdint>
 #include <SDL3/SDL.h>
-#include <SDL3/SDL_video.h>
 #include <SDL3/SDL_camera.h>
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_messagebox.h>
+#include <SDL3/SDL_render.h>
+#include <SDL3/SDL_surface.h>
+#include <SDL3/SDL_video.h>
+#include <chrono>
+#include <cstdint>
+#include <iostream>
+#include <thread>
 
 struct Window {
     std::string name = "Camera";
@@ -32,7 +36,6 @@ void handle_event(CameraApp *app) {
             break;
         case SDL_EVENT_CAMERA_DEVICE_DENIED:
             SDL_Log("Camera denied!");
-
             SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Camera permission denied!", "User denied access to the camera!", app->p_sdlwindow);
             app->quit = true;
             break;
@@ -72,11 +75,33 @@ int main() {
 
     SDL_Log("Using SDL camera driver: %s", SDL_GetCurrentCameraDriver());
 
+    SDL_Renderer *p_renderer = SDL_CreateRenderer(app.p_sdlwindow, NULL);
+    SDL_SetRenderDrawColor(p_renderer, 18, 18, 18, 0);
+    SDL_RenderClear(p_renderer);
+    SDL_RenderPresent(p_renderer);
+
+
     while (app.quit != true) {
         app.event = {}; // TODO: make sure this zero initializes
         while (SDL_PollEvent(&app.event)) {
             handle_event(&app);
         }
+
+        std::uint64_t timestamp_ns;
+        SDL_Surface* p_cam_surface = SDL_AcquireCameraFrame(app.p_camera, &timestamp_ns);
+        if (p_cam_surface) {
+            SDL_Texture* p_texture = SDL_CreateTextureFromSurface(p_renderer, p_cam_surface);
+            SDL_RenderTexture(p_renderer, p_texture, NULL, NULL);
+
+            SDL_RenderPresent(p_renderer);
+
+            SDL_DestroyTexture(p_texture);
+            SDL_ReleaseCameraFrame(app.p_camera, p_cam_surface);
+        }
+
+        std::chrono::seconds duration(1/60);
+        std::this_thread::sleep_for(duration);
+
     }
 
     SDL_DestroyWindow(app.p_sdlwindow);
