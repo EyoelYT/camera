@@ -1,4 +1,3 @@
-#include "SDL3/SDL_log.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_camera.h>
 #include <SDL3/SDL_events.h>
@@ -20,12 +19,19 @@ struct Window {
     std::uint32_t flags = 0;
 };
 
-struct CameraApp
-{
+struct Camera {
+    SDL_Camera *p_camera;
+    SDL_CameraID *p_camera_ids;
+    std::int32_t count_cameras;
+    SDL_CameraID camera_id;
+};
+
+struct CameraApp {
     Window window;
+    Camera camera;
     bool quit = false;
     SDL_Window *p_sdlwindow;
-    SDL_Camera *p_camera;
+    SDL_Renderer *p_renderer;
     SDL_Event event;
 };
 
@@ -58,27 +64,26 @@ int main() {
         return 1;
     }
 
-    std::int32_t count_cameras;
-    SDL_CameraID *p_camera_id = SDL_GetCameras(&count_cameras);
-    if (p_camera_id == NULL) {
+    app.camera.p_camera_ids = SDL_GetCameras(&app.camera.count_cameras);
+    if (app.camera.p_camera_ids == NULL) {
         SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Could not find cameras: %s\n", SDL_GetError());
     }
 
-    std::cout << "number of cameras: " << count_cameras << "\n";
-    SDL_CameraID cam_id = *p_camera_id;
+    std::cout << "number of cameras: " << app.camera.count_cameras << "\n";
+    app.camera.camera_id = *app.camera.p_camera_ids;
 
-    app.p_camera = SDL_OpenCamera(cam_id, NULL);
-    if (app.p_camera == NULL) {
+    app.camera.p_camera = SDL_OpenCamera(app.camera.camera_id, NULL);
+    if (app.camera.p_camera == NULL) {
         SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Could not open camera: %s\n", SDL_GetError());
         return 1;
     }
 
     SDL_Log("Using SDL camera driver: %s", SDL_GetCurrentCameraDriver());
 
-    SDL_Renderer *p_renderer = SDL_CreateRenderer(app.p_sdlwindow, NULL);
-    SDL_SetRenderDrawColor(p_renderer, 18, 18, 18, 0);
-    SDL_RenderClear(p_renderer);
-    SDL_RenderPresent(p_renderer);
+    app.p_renderer = SDL_CreateRenderer(app.p_sdlwindow, NULL);
+    SDL_SetRenderDrawColor(app.p_renderer, 18, 18, 18, 0);
+    SDL_RenderClear(app.p_renderer);
+    SDL_RenderPresent(app.p_renderer);
 
 
     while (app.quit != true) {
@@ -88,15 +93,15 @@ int main() {
         }
 
         std::uint64_t timestamp_ns;
-        SDL_Surface* p_cam_surface = SDL_AcquireCameraFrame(app.p_camera, &timestamp_ns);
+        SDL_Surface* p_cam_surface = SDL_AcquireCameraFrame(app.camera.p_camera, &timestamp_ns);
         if (p_cam_surface) {
-            SDL_Texture* p_texture = SDL_CreateTextureFromSurface(p_renderer, p_cam_surface);
-            SDL_RenderTexture(p_renderer, p_texture, NULL, NULL);
+            SDL_Texture* p_texture = SDL_CreateTextureFromSurface(app.p_renderer, p_cam_surface);
+            SDL_RenderTexture(app.p_renderer, p_texture, NULL, NULL);
 
-            SDL_RenderPresent(p_renderer);
+            SDL_RenderPresent(app.p_renderer);
 
             SDL_DestroyTexture(p_texture);
-            SDL_ReleaseCameraFrame(app.p_camera, p_cam_surface);
+            SDL_ReleaseCameraFrame(app.camera.p_camera, p_cam_surface);
         }
 
         std::chrono::seconds duration(1/60);
