@@ -8,7 +8,6 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
-#include <iostream>
 #include <thread>
 
 struct Window {
@@ -21,10 +20,11 @@ struct Window {
 };
 
 struct Camera {
-    SDL_Camera *p_camera;
-    SDL_CameraID *p_camera_ids;
-    std::int32_t count_cameras;
     SDL_CameraID camera_id;
+    SDL_CameraID *p_camera_ids;
+    SDL_Camera *p_camera;
+    std::int32_t count_cameras;
+    std::int32_t selected_index = 0;
 };
 
 struct CameraApp {
@@ -34,6 +34,14 @@ struct CameraApp {
     SDL_Window *p_sdlwindow;
     SDL_Renderer *p_renderer;
     SDL_Event event;
+
+    ~CameraApp () {
+        if (p_renderer) SDL_DestroyRenderer(p_renderer);
+        if (camera.p_camera) SDL_CloseCamera(camera.p_camera);
+        if (camera.p_camera_ids) SDL_free(camera.p_camera_ids);
+        if (p_sdlwindow) SDL_DestroyWindow(p_sdlwindow);
+        SDL_Quit();
+    }
 };
 
 void handle_event(CameraApp *app) {
@@ -55,13 +63,11 @@ void handle_event(CameraApp *app) {
 }
 
 void init_window(CameraApp *app) {
-
     app->p_sdlwindow = SDL_CreateWindow(app->window.name.c_str(), app->window.w, app->window.h, app->window.flags);
     if (app->p_sdlwindow == NULL) {
         SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Could not create window: %s\n", SDL_GetError());
         exit(1);
     }
-
 }
 
 void init_camera(CameraApp *app) {
@@ -70,9 +76,13 @@ void init_camera(CameraApp *app) {
         SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Could not find cameras: %s\n", SDL_GetError());
     }
 
-    std::cout << "number of cameras: " << app->camera.count_cameras << "\n";
-    app->camera.camera_id = *app->camera.p_camera_ids;
+    SDL_Log("number of cameras: %d", app->camera.count_cameras);
+    if (app->camera.count_cameras == 0) {
+        SDL_LogError(SDL_LOG_CATEGORY_ERROR, "No cameras found\n");
+        exit(1);
+    }
 
+    app->camera.camera_id = app->camera.p_camera_ids[app->camera.selected_index];
     app->camera.p_camera = SDL_OpenCamera(app->camera.camera_id, NULL);
     if (app->camera.p_camera == NULL) {
         SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Could not open camera: %s\n", SDL_GetError());
@@ -109,7 +119,7 @@ void camera_render_loop(CameraApp *app) {
             SDL_ReleaseCameraFrame(app->camera.p_camera, p_cam_surface);
         }
 
-        std::chrono::seconds duration(1/60);
+        std::chrono::microseconds duration(16667);
         std::this_thread::sleep_for(duration);
 
     }
@@ -126,7 +136,5 @@ int main() {
     init_camera_renderer(&app);
     camera_render_loop(&app);
 
-    SDL_DestroyWindow(app.p_sdlwindow);
-    SDL_Quit();
     return 0;
 }
