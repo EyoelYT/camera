@@ -30,15 +30,17 @@ struct Camera {
 };
 
 struct CameraApp {
+    SDL_Event event;
     Window window;
     Camera camera;
-    bool quit = false;
     SDL_Window *p_sdlwindow;
     SDL_Renderer *p_renderer;
-    SDL_Event event;
+    SDL_Texture *p_texture = nullptr;
+    bool quit = false;
 
     ~CameraApp () {
         if (p_renderer) SDL_DestroyRenderer(p_renderer);
+        if (p_texture) SDL_DestroyTexture(p_texture);
         if (camera.p_camera) SDL_CloseCamera(camera.p_camera);
         if (camera.p_camera_ids) SDL_free(camera.p_camera_ids);
         if (p_sdlwindow) SDL_DestroyWindow(p_sdlwindow);
@@ -50,6 +52,11 @@ void change_camera(CameraApp *app, std::int8_t delta) {
     SDL_Log("Camera is %s, with id %u", SDL_GetCameraName(app->camera.p_camera_ids[app->camera.selected_index]), app->camera.camera_id);
 
     SDL_CloseCamera(app->camera.p_camera);
+
+    if (app->p_texture) {
+        SDL_DestroyTexture(app->p_texture);
+        app->p_texture = nullptr;
+    }
 
     app->camera.selected_index += delta;
     app->camera.camera_id = app->camera.p_camera_ids[app->camera.selected_index];
@@ -145,22 +152,36 @@ void init_camera_renderer(CameraApp *app) {
 void camera_render_loop(CameraApp *app) {
 
     while (app->quit != true) {
-        app->event = {}; // TODO: make sure this zero initializes
+
         while (SDL_PollEvent(&app->event)) {
             handle_event(app);
         }
 
         std::uint64_t timestamp_ns;
         SDL_Surface* p_cam_surface = SDL_AcquireCameraFrame(app->camera.p_camera, &timestamp_ns);
+
+        // If no texture, create new texture from new surface data
+        // Else if new surface dimensions is different from previous texture dimensions, destroy texture and create a new one from new surface
+        // Else update previous texture values with new surface data
         if (p_cam_surface) {
-            SDL_Texture* p_texture = SDL_CreateTextureFromSurface(app->p_renderer, p_cam_surface);
-            SDL_RenderTexture(app->p_renderer, p_texture, NULL, NULL);
+            if (!app->p_texture) {
+                app->p_texture = SDL_CreateTextureFromSurface(app->p_renderer, p_cam_surface);
+            } else {
+                float tw, th;
+                SDL_GetTextureSize(app->p_texture, &tw, &th);
+                if (p_cam_surface->w != (int)tw || p_cam_surface->h != (int)th) {
+                    SDL_DestroyTexture(app->p_texture);
+                    app->p_texture = SDL_CreateTextureFromSurface(app->p_renderer, p_cam_surface);
+                } else {
+                    SDL_UpdateTexture(app->p_texture, NULL, p_cam_surface->pixels, p_cam_surface->pitch);
 
-            SDL_RenderPresent(app->p_renderer);
-
-            SDL_DestroyTexture(p_texture);
+                }
+            }
             SDL_ReleaseCameraFrame(app->camera.p_camera, p_cam_surface);
         }
+
+        SDL_RenderTexture(app->p_renderer, app->p_texture, NULL, NULL);
+        SDL_RenderPresent(app->p_renderer);
 
         std::chrono::microseconds duration(16667);
         std::this_thread::sleep_for(duration);
