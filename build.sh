@@ -3,4 +3,5 @@
 g++ camera.cpp \
     -I/opt/homebrew/Cellar/sdl3/3.4.2/include \
     -L/opt/homebrew/Cellar/sdl3/3.4.2/lib -lSDL3 \
-    -g -Wall -Wextra -O0 -D_GLIBCXX_ASSERTIONS -fsanitize=address
+    -g -Wall -Wextra -O0 -D_GLIBCXX_ASSERTIONS -fsanitize=address \
+    -o cam

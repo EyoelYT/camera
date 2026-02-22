@@ -18,6 +18,7 @@ struct Window {
     std::int32_t w = 800;
     std::int32_t h = 600;
     std::uint32_t flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_BORDERLESS;
+    bool on_top = false;
 };
 
 struct Camera {
@@ -73,6 +74,9 @@ void handle_keydown_keybinds(CameraApp *app) {
                 change_camera(app, 1);
             }
             break;
+        case SDL_SCANCODE_T:
+            app->window.on_top = !app->window.on_top;
+            SDL_SetWindowAlwaysOnTop(app->p_sdlwindow, app->window.on_top);
         default:
             break;
     }
