@@ -3,6 +3,7 @@
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_messagebox.h>
 #include <SDL3/SDL_render.h>
+#include <SDL3/SDL_scancode.h>
 #include <SDL3/SDL_surface.h>
 #include <SDL3/SDL_video.h>
 #include <chrono>
@@ -12,11 +13,11 @@
 
 struct Window {
     std::string name = "Camera";
-    std::int32_t x = 0;
-    std::int32_t y = 0;
+    std::int32_t x;
+    std::int32_t y;
     std::int32_t w = 800;
     std::int32_t h = 600;
-    std::uint32_t flags = 0;
+    std::uint32_t flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_BORDERLESS;
 };
 
 struct Camera {
@@ -44,6 +45,39 @@ struct CameraApp {
     }
 };
 
+void change_camera(CameraApp *app, std::int8_t delta) {
+    SDL_Log("Camera is %s, with id %u", SDL_GetCameraName(app->camera.p_camera_ids[app->camera.selected_index]), app->camera.camera_id);
+
+    SDL_CloseCamera(app->camera.p_camera);
+
+    app->camera.selected_index += delta;
+    app->camera.camera_id = app->camera.p_camera_ids[app->camera.selected_index];
+
+    app->camera.p_camera = SDL_OpenCamera(app->camera.camera_id, NULL);
+    if (app->camera.p_camera == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Could not open camera: %s", SDL_GetError());
+        exit(1);
+    }
+    SDL_Log("Changed camera to %s, with id %u", SDL_GetCameraName(app->camera.p_camera_ids[app->camera.selected_index]), app->camera.camera_id);
+}
+
+void handle_keydown_keybinds(CameraApp *app) {
+    switch (app->event.key.scancode) {
+        case SDL_SCANCODE_UP:
+            if (app->camera.selected_index > 0) {
+                change_camera(app, -1);
+            }
+            break;
+        case SDL_SCANCODE_DOWN:
+            if (app->camera.selected_index < app->camera.count_cameras - 1) {
+                change_camera(app, 1);
+            }
+            break;
+        default:
+            break;
+    }
+}
+
 void handle_event(CameraApp *app) {
     switch (app->event.type) {
         case SDL_EVENT_CAMERA_DEVICE_APPROVED:
@@ -54,8 +88,13 @@ void handle_event(CameraApp *app) {
             SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Camera permission denied!", "User denied access to the camera!", app->p_sdlwindow);
             app->quit = true;
             break;
+        case SDL_EVENT_WINDOW_RESIZED:
+            break;
         case SDL_EVENT_QUIT:
             app->quit = true;
+            break;
+        case SDL_EVENT_KEY_DOWN:
+            handle_keydown_keybinds(app);
             break;
         default:
             break;
@@ -65,7 +104,7 @@ void handle_event(CameraApp *app) {
 void init_window(CameraApp *app) {
     app->p_sdlwindow = SDL_CreateWindow(app->window.name.c_str(), app->window.w, app->window.h, app->window.flags);
     if (app->p_sdlwindow == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Could not create window: %s\n", SDL_GetError());
+        SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Could not create window: %s", SDL_GetError());
         exit(1);
     }
 }
@@ -73,19 +112,19 @@ void init_window(CameraApp *app) {
 void init_camera(CameraApp *app) {
     app->camera.p_camera_ids = SDL_GetCameras(&app->camera.count_cameras);
     if (app->camera.p_camera_ids == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Could not find cameras: %s\n", SDL_GetError());
+        SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Could not find cameras: %s", SDL_GetError());
     }
 
     SDL_Log("number of cameras: %d", app->camera.count_cameras);
     if (app->camera.count_cameras == 0) {
-        SDL_LogError(SDL_LOG_CATEGORY_ERROR, "No cameras found\n");
+        SDL_LogError(SDL_LOG_CATEGORY_ERROR, "No cameras found");
         exit(1);
     }
 
     app->camera.camera_id = app->camera.p_camera_ids[app->camera.selected_index];
     app->camera.p_camera = SDL_OpenCamera(app->camera.camera_id, NULL);
     if (app->camera.p_camera == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Could not open camera: %s\n", SDL_GetError());
+        SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Could not open camera: %s", SDL_GetError());
         exit(1);
     }
 
