@@ -17,8 +17,9 @@ struct Window {
     std::int32_t y;
     std::int32_t w = 800;
     std::int32_t h = 600;
-    std::uint32_t flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_BORDERLESS;
+    std::uint32_t flags = SDL_WINDOW_RESIZABLE;
     bool on_top = false;
+    bool bordered = true;
 };
 
 struct Camera {
@@ -71,44 +72,49 @@ void change_camera(CameraApp *app, std::int8_t delta) {
 
 void handle_keydown_keybinds(CameraApp *app) {
     switch (app->event.key.scancode) {
-        case SDL_SCANCODE_UP:
-            if (app->camera.selected_index > 0) {
-                change_camera(app, -1);
-            }
-            break;
-        case SDL_SCANCODE_DOWN:
-            if (app->camera.selected_index < app->camera.count_cameras - 1) {
-                change_camera(app, 1);
-            }
-            break;
-        case SDL_SCANCODE_T:
-            app->window.on_top = !app->window.on_top;
-            SDL_SetWindowAlwaysOnTop(app->p_sdlwindow, app->window.on_top);
-        default:
-            break;
+    case SDL_SCANCODE_UP:
+        if (app->camera.selected_index > 0) {
+            change_camera(app, -1);
+        }
+        break;
+    case SDL_SCANCODE_DOWN:
+        if (app->camera.selected_index < app->camera.count_cameras - 1) {
+            change_camera(app, 1);
+        }
+        break;
+    case SDL_SCANCODE_T:
+        app->window.on_top = !app->window.on_top;
+        SDL_SetWindowAlwaysOnTop(app->p_sdlwindow, app->window.on_top);
+        break;
+    case SDL_SCANCODE_B:
+        app->window.bordered = !app->window.bordered;
+        SDL_SetWindowBordered(app->p_sdlwindow, app->window.bordered);
+        break;
+    default:
+        break;
     }
 }
 
 void handle_event(CameraApp *app) {
     switch (app->event.type) {
-        case SDL_EVENT_CAMERA_DEVICE_APPROVED:
-            SDL_Log("Camera approved!");
-            break;
-        case SDL_EVENT_CAMERA_DEVICE_DENIED:
-            SDL_Log("Camera denied!");
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Camera permission denied!", "User denied access to the camera!", app->p_sdlwindow);
-            app->quit = true;
-            break;
-        case SDL_EVENT_WINDOW_RESIZED:
-            break;
-        case SDL_EVENT_QUIT:
-            app->quit = true;
-            break;
-        case SDL_EVENT_KEY_DOWN:
-            handle_keydown_keybinds(app);
-            break;
-        default:
-            break;
+    case SDL_EVENT_CAMERA_DEVICE_APPROVED:
+        SDL_Log("Camera approved!");
+        break;
+    case SDL_EVENT_CAMERA_DEVICE_DENIED:
+        SDL_Log("Camera denied!");
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Camera permission denied!", "User denied access to the camera!", app->p_sdlwindow);
+        app->quit = true;
+        break;
+    case SDL_EVENT_WINDOW_RESIZED:
+        break;
+    case SDL_EVENT_QUIT:
+        app->quit = true;
+        break;
+    case SDL_EVENT_KEY_DOWN:
+        handle_keydown_keybinds(app);
+        break;
+    default:
+        break;
     }
 }
 
