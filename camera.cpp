@@ -199,7 +199,7 @@ void camera_render_loop(CameraApp *app) {
 int main() {
     CameraApp app;
 
-    SDL_Init(SDL_INIT_CAMERA | SDL_INIT_VIDEO | SDL_WINDOW_METAL);
+    SDL_Init(SDL_INIT_CAMERA | SDL_INIT_VIDEO);
 
     init_window(&app);
     init_camera(&app);
