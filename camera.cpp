@@ -24,8 +24,8 @@ struct Window {
 
 struct Camera {
     SDL_CameraID camera_id;
-    SDL_CameraID *p_camera_ids;
-    SDL_Camera *p_camera;
+    SDL_CameraID *p_camera_ids = nullptr;
+    SDL_Camera *p_camera = nullptr;
     std::int32_t count_cameras;
     std::int32_t selected_index = 0;
 };
@@ -34,8 +34,8 @@ struct CameraApp {
     SDL_Event event;
     Window window;
     Camera camera;
-    SDL_Window *p_sdlwindow;
-    SDL_Renderer *p_renderer;
+    SDL_Window *p_sdlwindow = nullptr;
+    SDL_Renderer *p_renderer = nullptr;
     SDL_Texture *p_texture = nullptr;
     bool quit = false;
 
