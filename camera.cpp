@@ -38,6 +38,7 @@ struct CameraApp {
     SDL_Renderer *p_renderer = nullptr;
     SDL_Texture *p_texture = nullptr;
     bool quit = false;
+    bool fullsize_snapshot_requested = false;
 
     ~CameraApp () {
         if (p_renderer) SDL_DestroyRenderer(p_renderer);
@@ -70,6 +71,23 @@ void change_camera(CameraApp *app, std::int8_t delta) {
     SDL_Log("Changed camera to %s, with id %u", SDL_GetCameraName(app->camera.p_camera_ids[app->camera.selected_index]), app->camera.camera_id);
 }
 
+void take_fullsize_snapshot(CameraApp *app, SDL_Surface *p_camera_surface) {
+    SDL_Surface *p_snapshot = SDL_DuplicateSurface(p_camera_surface);
+    if (p_snapshot) {
+        std::chrono::time_point time_now = std::chrono::system_clock::now();
+        std::string filename = "snapshot_" + std::format("{:%Y-%m-%d_%H:%M:%S}", time_now) + ".bmp";
+
+        if (SDL_SaveBMP(p_snapshot, filename.c_str())) {
+            SDL_Log("Snapshot saved successfully to %s", filename.c_str());
+        }
+        else {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to save snapshot: %s", SDL_GetError());
+        }
+        SDL_DestroySurface(p_snapshot);
+    }
+    app->fullsize_snapshot_requested = false;
+}
+
 void handle_keydown_keybinds(CameraApp *app) {
     switch (app->event.key.scancode) {
     case SDL_SCANCODE_UP:
@@ -89,6 +107,9 @@ void handle_keydown_keybinds(CameraApp *app) {
     case SDL_SCANCODE_B:
         app->window.bordered = !app->window.bordered;
         SDL_SetWindowBordered(app->p_sdlwindow, app->window.bordered);
+        break;
+    case SDL_SCANCODE_F:
+        app->fullsize_snapshot_requested = true;
         break;
     default:
         break;
@@ -172,17 +193,24 @@ void camera_render_loop(CameraApp *app) {
         if (p_cam_surface) {
             if (!app->p_texture) {
                 app->p_texture = SDL_CreateTextureFromSurface(app->p_renderer, p_cam_surface);
-            } else {
+            }
+            else {
                 float tw, th;
                 SDL_GetTextureSize(app->p_texture, &tw, &th);
+
                 if (p_cam_surface->w != (int)tw || p_cam_surface->h != (int)th) {
                     SDL_DestroyTexture(app->p_texture);
                     app->p_texture = SDL_CreateTextureFromSurface(app->p_renderer, p_cam_surface);
-                } else {
+                }
+                else {
                     SDL_UpdateTexture(app->p_texture, NULL, p_cam_surface->pixels, p_cam_surface->pitch);
-
                 }
             }
+
+            if (app->fullsize_snapshot_requested) {
+                take_fullsize_snapshot(app, p_cam_surface);
+            }
+
             SDL_ReleaseCameraFrame(app->camera.p_camera, p_cam_surface);
         }
 
