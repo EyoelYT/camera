@@ -39,6 +39,7 @@ struct CameraApp {
     SDL_Texture *p_texture = nullptr;
     bool quit = false;
     bool fullsize_snapshot_requested = false;
+    bool screensize_snapshot_requested = false;
 
     ~CameraApp () {
         if (p_renderer) SDL_DestroyRenderer(p_renderer);
@@ -88,6 +89,23 @@ void take_fullsize_snapshot(CameraApp *app, SDL_Surface *p_camera_surface) {
     app->fullsize_snapshot_requested = false;
 }
 
+void take_screensize_snapshot(CameraApp *app, const SDL_Rect *rect) {
+    SDL_Surface *p_snapshot = SDL_RenderReadPixels(app->p_renderer, rect);
+    if (p_snapshot) {
+        std::chrono::time_point time_now = std::chrono::system_clock::now();
+        std::string filename = "snapshot_" + std::format("{:%Y-%m-%d_%H:%M:%S}", time_now) + ".bmp";
+
+        if (SDL_SaveBMP(p_snapshot, filename.c_str())) {
+            SDL_Log("Snapshot saved successfully to %s", filename.c_str());
+        }
+        else {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to save snapshot: %s", SDL_GetError());
+        }
+        SDL_DestroySurface(p_snapshot);
+    }
+    app->screensize_snapshot_requested = false;
+}
+
 void handle_keydown_keybinds(CameraApp *app) {
     switch (app->event.key.scancode) {
     case SDL_SCANCODE_UP:
@@ -110,6 +128,9 @@ void handle_keydown_keybinds(CameraApp *app) {
         break;
     case SDL_SCANCODE_F:
         app->fullsize_snapshot_requested = true;
+        break;
+    case SDL_SCANCODE_S:
+        app->screensize_snapshot_requested = true;
         break;
     default:
         break;
@@ -216,6 +237,10 @@ void camera_render_loop(CameraApp *app) {
 
         if (app->p_texture) {
             SDL_RenderTexture(app->p_renderer, app->p_texture, NULL, NULL);
+
+            if (app->screensize_snapshot_requested) {
+                take_screensize_snapshot(app, NULL);
+            }
         }
 
         SDL_RenderPresent(app->p_renderer);
