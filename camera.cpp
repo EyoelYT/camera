@@ -186,7 +186,10 @@ void camera_render_loop(CameraApp *app) {
             SDL_ReleaseCameraFrame(app->camera.p_camera, p_cam_surface);
         }
 
-        SDL_RenderTexture(app->p_renderer, app->p_texture, NULL, NULL);
+        if (app->p_texture) {
+            SDL_RenderTexture(app->p_renderer, app->p_texture, NULL, NULL);
+        }
+
         SDL_RenderPresent(app->p_renderer);
 
         std::chrono::microseconds duration(16667);
