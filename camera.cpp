@@ -38,6 +38,8 @@ struct CameraApp {
     SDL_Renderer *p_renderer = nullptr;
     SDL_Texture *p_texture = nullptr;
     bool quit = false;
+    bool reset_to_larger_side_of_window = false;
+    bool reset_to_smaller_side_of_window = false;
     bool fullsize_snapshot_requested = false;
     bool screensize_snapshot_requested = false;
 
@@ -89,6 +91,54 @@ void take_fullsize_snapshot(CameraApp *app, SDL_Surface *p_camera_surface) {
     app->fullsize_snapshot_requested = false;
 }
 
+void reset_window_size(CameraApp *app, SDL_Surface *p_cam_surface, bool to_larger_side) {
+
+    // Get camera surface size ratio
+    int sw = p_cam_surface->w;
+    int sh = p_cam_surface->h;
+
+    // Get window surface size ratio
+    int ww;
+    int wh;
+    if (SDL_GetWindowSize(app->p_sdlwindow, &ww, &wh) == false) {
+        SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Could not get window size: %s", SDL_GetError());
+        return;
+    }
+
+    float normal_ratio = static_cast<float>(sw) / sh;
+    float current_ratio = static_cast<float>(ww) / wh;
+
+    if (to_larger_side) {
+        // When window is too wide -> Increase height
+        if (current_ratio > normal_ratio) {
+            wh = static_cast<int>(ww / normal_ratio);
+        }
+        // When window is too tall -> Increase width
+	    else {
+	        ww = static_cast<int>(wh * normal_ratio);
+        }
+	    app->reset_to_larger_side_of_window = false;
+	}
+    else {
+        // When window is too wide -> Decrease width
+        if (current_ratio > normal_ratio) {
+            ww = static_cast<int>(wh * normal_ratio);
+        }
+        // When window is too tall -> Decrease height
+        else {
+            wh = static_cast<int>(ww / normal_ratio);
+        }
+	    app->reset_to_smaller_side_of_window = false;
+    }
+
+    // Set window size to camera size
+    if (SDL_SetWindowSize(app->p_sdlwindow, ww, wh) == false) {
+        SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Could not reset window size: %s", SDL_GetError());
+        return;
+    }
+
+}
+
 void take_screensize_snapshot(CameraApp *app, const SDL_Rect *rect) {
     SDL_Surface *p_snapshot = SDL_RenderReadPixels(app->p_renderer, rect);
     if (p_snapshot) {
@@ -131,6 +181,14 @@ void handle_keydown_keybinds(CameraApp *app) {
         break;
     case SDL_SCANCODE_S:
         app->screensize_snapshot_requested = true;
+        break;
+    case SDL_SCANCODE_R:
+        if (app->event.key.mod & SDL_KMOD_SHIFT) {
+            app->reset_to_smaller_side_of_window = true;
+        }
+        else {
+            app->reset_to_larger_side_of_window = true;
+        }
         break;
     default:
         break;
@@ -212,6 +270,15 @@ void camera_render_loop(CameraApp *app) {
         // Else if new surface dimensions is different from previous texture dimensions, destroy texture and create a new one from new surface
         // Else update previous texture values with new surface data
         if (p_cam_surface) {
+
+            if (app->reset_to_larger_side_of_window) {
+                reset_window_size(app, p_cam_surface, true);
+            }
+
+            if (app->reset_to_smaller_side_of_window) {
+                reset_window_size(app, p_cam_surface, false);
+            }
+
             if (!app->p_texture) {
                 app->p_texture = SDL_CreateTextureFromSurface(app->p_renderer, p_cam_surface);
             }
