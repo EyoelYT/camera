@@ -37,7 +37,9 @@ struct CameraApp {
     SDL_Window *p_sdlwindow = nullptr;
     SDL_Renderer *p_renderer = nullptr;
     SDL_Texture *p_texture = nullptr;
+    SDL_Texture *p_ascii_texture = nullptr;
     bool quit = false;
+    bool ascii_mode = false;
     bool reset_to_larger_side_of_window = false;
     bool reset_to_smaller_side_of_window = false;
     bool fullsize_snapshot_requested = false;
@@ -46,6 +48,7 @@ struct CameraApp {
     ~CameraApp () {
         if (p_renderer) SDL_DestroyRenderer(p_renderer);
         if (p_texture) SDL_DestroyTexture(p_texture);
+        if (p_ascii_texture) SDL_DestroyTexture(p_ascii_texture);
         if (camera.p_camera) SDL_CloseCamera(camera.p_camera);
         if (camera.p_camera_ids) SDL_free(camera.p_camera_ids);
         if (p_sdlwindow) SDL_DestroyWindow(p_sdlwindow);
@@ -75,7 +78,22 @@ void change_camera(CameraApp *app, std::int8_t delta) {
 }
 
 void take_fullsize_snapshot(CameraApp *app, SDL_Surface *p_camera_surface) {
-    SDL_Surface *p_snapshot = SDL_DuplicateSurface(p_camera_surface);
+
+    SDL_Surface *p_snapshot = nullptr;
+
+    if (app->ascii_mode && app->p_ascii_texture) {
+        // No CPU-side surface exists for the ASCII render; it only lives as
+        // draw calls baked into the p_ascii_texture. Bind it as the render
+        // target so we can read its pixels back into a surface.
+        SDL_SetRenderTarget(app->p_renderer, app->p_ascii_texture);
+        p_snapshot = SDL_RenderReadPixels(app->p_renderer, NULL);
+        // Then reset the render target
+        SDL_SetRenderTarget(app->p_renderer, NULL);
+    }
+    else {
+        p_snapshot = SDL_DuplicateSurface(p_camera_surface);
+    }
+
     if (p_snapshot) {
         std::chrono::time_point time_now = std::chrono::system_clock::now();
         std::string filename = "snapshot_" + std::format("{:%Y-%m-%d_%H:%M:%S}", time_now) + ".bmp";
@@ -182,6 +200,9 @@ void handle_keydown_keybinds(CameraApp *app) {
     case SDL_SCANCODE_S:
         app->screensize_snapshot_requested = true;
         break;
+    case SDL_SCANCODE_A:
+        app->ascii_mode = !app->ascii_mode;
+        break;
     case SDL_SCANCODE_R:
         if (app->event.key.mod & SDL_KMOD_SHIFT) {
             app->reset_to_smaller_side_of_window = true;
@@ -263,6 +284,10 @@ void camera_render_loop(CameraApp *app) {
             handle_event(app);
         }
 
+        // Clear every frame
+        SDL_SetRenderDrawColor(app->p_renderer, 18, 18, 18, 255);
+        SDL_RenderClear(app->p_renderer);
+
         std::uint64_t timestamp_ns;
         SDL_Surface* p_cam_surface = SDL_AcquireCameraFrame(app->camera.p_camera, &timestamp_ns);
 
@@ -279,34 +304,120 @@ void camera_render_loop(CameraApp *app) {
                 reset_window_size(app, p_cam_surface, false);
             }
 
-            if (!app->p_texture) {
-                app->p_texture = SDL_CreateTextureFromSurface(app->p_renderer, p_cam_surface);
-            }
-            else {
-                float tw, th;
-                SDL_GetTextureSize(app->p_texture, &tw, &th);
+            if (!app->ascii_mode) {
 
-                if (p_cam_surface->w != (int)tw || p_cam_surface->h != (int)th) {
-                    SDL_DestroyTexture(app->p_texture);
+                if (!app->p_texture) {
                     app->p_texture = SDL_CreateTextureFromSurface(app->p_renderer, p_cam_surface);
                 }
                 else {
-                    SDL_UpdateTexture(app->p_texture, NULL, p_cam_surface->pixels, p_cam_surface->pitch);
+                    float tw, th;
+                    SDL_GetTextureSize(app->p_texture, &tw, &th);
+
+                    if (p_cam_surface->w != (int)tw || p_cam_surface->h != (int)th) {
+                        SDL_DestroyTexture(app->p_texture);
+                        app->p_texture = SDL_CreateTextureFromSurface(app->p_renderer, p_cam_surface);
+                    }
+                    else {
+                        SDL_UpdateTexture(app->p_texture, NULL, p_cam_surface->pixels, p_cam_surface->pitch);
+                    }
                 }
+
+                if (app->fullsize_snapshot_requested) {
+                    take_fullsize_snapshot(app, p_cam_surface);
+                }
+
             }
 
-            if (app->fullsize_snapshot_requested) {
-                take_fullsize_snapshot(app, p_cam_surface);
+            else if (app->ascii_mode) {
+
+                // Convert pixel buffer into standard SDL_PIXELFORMAT_RGB24
+                SDL_Surface *p_rgb_surface = SDL_ConvertSurface(p_cam_surface, SDL_PIXELFORMAT_RGB24);
+
+                if (p_rgb_surface) {
+
+                    std::string ascii_palette = " .:-=+*#%@"; // Darkest to brightest
+
+                    int font_w = 8;
+                    int font_h = 8;
+
+                    std::uint8_t *p_rgb_pixels = (std::uint8_t*)p_rgb_surface->pixels;
+                    int rgb_pitch = p_rgb_surface->pitch;
+
+                    float atw = 0;
+                    float ath = 0;
+
+                    // Fetch the ascii target texture size if it exists already
+                    if (app->p_ascii_texture) {
+                        SDL_GetTextureSize(app->p_ascii_texture, &atw, &ath);
+                    }
+                    // Recreate the ascii target texture if it is missing or if the size of the camera frame has changed
+                    if (!app->p_ascii_texture || p_rgb_surface->w != (int)atw || p_rgb_surface->h != (int)ath) {
+                        if (app->p_ascii_texture) {
+                            SDL_DestroyTexture(app->p_ascii_texture);
+                        }
+                        app->p_ascii_texture = SDL_CreateTexture(app->p_renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, p_rgb_surface->w, p_rgb_surface->h);
+                    }
+
+                    // Draw the ascii frame into the texture
+                    SDL_SetRenderTarget(app->p_renderer, app->p_ascii_texture);
+                    SDL_SetRenderDrawColor(app->p_renderer, 18, 18, 18, 255);
+                    SDL_RenderClear(app->p_renderer);
+                    SDL_SetRenderDrawColor(app->p_renderer, 255, 255, 255, 255);
+
+                    for (int y = 0; y < p_rgb_surface->h; y += font_h) {
+                        for (int x = 0; x < p_rgb_surface->w; x += font_w) {
+                            // Calculate precise offsets for the 24-bit RGB pixel data
+                            std::uint8_t *p_converted_pixel = p_rgb_pixels + (y * rgb_pitch) + (x * 3);
+                            std::uint8_t converted_r = p_converted_pixel[0];
+                            std::uint8_t converted_g = p_converted_pixel[1];
+                            std::uint8_t converted_b = p_converted_pixel[2];
+
+                            // Grayscale luminance formula
+                            std::uint8_t brightness = (std::uint8_t)(0.299f * converted_r + 0.587f * converted_g + 0.114f * converted_b);
+                            int char_index = (brightness * (ascii_palette.length() - 1)) / 255;
+
+                            char glyph[2] = { ascii_palette[char_index], '\0' };
+
+                            SDL_RenderDebugText(app->p_renderer, (float)x, (float)y, glyph);
+                        }
+                    }
+
+                    if (app->fullsize_snapshot_requested) {
+                        take_fullsize_snapshot(app, p_rgb_surface);
+                    }
+
+                    // Hand rendering back to the window
+                    SDL_SetRenderTarget(app->p_renderer, NULL);
+
+                    SDL_DestroySurface(p_rgb_surface);
+
+                }
+                else {
+                    SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Could not create SDL_PIXELFORMAT_RGB24 surface: %s", SDL_GetError());
+                }
             }
 
             SDL_ReleaseCameraFrame(app->camera.p_camera, p_cam_surface);
         }
 
-        if (app->p_texture) {
-            SDL_RenderTexture(app->p_renderer, app->p_texture, NULL, NULL);
+        // Render the stored texture
+        if (!app->ascii_mode) {
+            if (app->p_texture) {
 
-            if (app->screensize_snapshot_requested) {
-                take_screensize_snapshot(app, NULL);
+                SDL_RenderTexture(app->p_renderer, app->p_texture, NULL, NULL);
+
+                if (app->screensize_snapshot_requested) {
+                    take_screensize_snapshot(app, NULL);
+                }
+            }
+        }
+        else {
+            if (app->p_ascii_texture) {
+                SDL_RenderTexture(app->p_renderer, app->p_ascii_texture, NULL, NULL);
+
+                if (app->screensize_snapshot_requested) {
+                    take_screensize_snapshot(app, NULL);
+                }
             }
         }
 
