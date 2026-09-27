@@ -2,7 +2,7 @@
 
 g++ camera.cpp \
     -std=c++23 \
-    -I/opt/homebrew/Cellar/sdl3/3.4.2/include \
-    -L/opt/homebrew/Cellar/sdl3/3.4.2/lib -lSDL3 \
+    -I/opt/homebrew/Cellar/sdl3/3.4.16/include \
+    -L/opt/homebrew/Cellar/sdl3/3.4.16/lib -lSDL3 \
     -g -Wall -Wextra -O0 -D_GLIBCXX_ASSERTIONS -fsanitize=address \
     -o cam
